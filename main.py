@@ -1,52 +1,51 @@
 import os
 import time
 from Game.agents.agent import RandomAgent
-from Game.game_env.environment import create_kirby_environment
-from Game.control.game_start import start_game
-from Game.control.agent_actions import random_agent_actions
+from Game.game_env.environment import KirbyEnvironment
 from pyboy.utils import WindowEvent
 
 def main():
-    # Specify the path to the ROM file (absolute or relative)
+    # Specify the path to the ROM file
     rom_path = os.path.join("Game", "Kirby.gb")
     
-    # Create the emulator environment
-    pyboy = create_kirby_environment(rom_path)
-    if not pyboy:
-        print("Error: The Kirby environment could not be created.")
-        return
-
+    # Create the Kirby environment
+    env = KirbyEnvironment(rom_path)
     print("Kirby environment successfully created! The game should now be running in the window.")
 
-    # Set the emulator to turbo mode
-    pyboy.set_emulation_speed(0)  # Sets the speed to maximum
-
-    # Define the possible buttons that can be pressed
-    buttons = [
+    # Define possible actions
+    actions = [
         WindowEvent.PRESS_ARROW_UP,
         WindowEvent.PRESS_ARROW_DOWN,
         WindowEvent.PRESS_ARROW_LEFT,
         WindowEvent.PRESS_ARROW_RIGHT,
         WindowEvent.PRESS_BUTTON_A,
         WindowEvent.PRESS_BUTTON_B,
+        WindowEvent.RELEASE_ARROW_UP,
+        WindowEvent.RELEASE_ARROW_DOWN,
+        WindowEvent.RELEASE_ARROW_LEFT,
+        WindowEvent.RELEASE_ARROW_RIGHT,
+        WindowEvent.RELEASE_BUTTON_A,
+        WindowEvent.RELEASE_BUTTON_B,
     ]
     
     # Initialize the Random Agent
-    agent = RandomAgent(buttons)
+    agent = RandomAgent(actions)
 
-    # Give the window time to become visible
-    time.sleep(3)
-
-    # Phase 1: Start the game
-    start_game(pyboy)
-
-    # Phase 2: Execute random actions
-    random_agent_actions(pyboy, agent, buttons)
-
-    # Cleanly close PyBoy
-    pyboy.stop()
+    # Main game loop for the agent to take random actions
+    try:
+        while(True):  # Specify a limited number of steps for testing
+            action = agent.select_action()
+            #print (_)
+            env.step(action)  # Use env.step(action) instead of directly calling send_input
+            
+            # Optional delay to control the frame rate
+           # time.sleep()
+    except KeyboardInterrupt:
+        print("Game interrupted by the user.")
+    
+    # Cleanly close the environment
+    env.close()
     print("PyBoy has been successfully closed.")
-
 
 if __name__ == "__main__":
     main()
