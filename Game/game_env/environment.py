@@ -1,74 +1,85 @@
 from pyboy import PyBoy
-from pyboy.plugins.game_wrapper_kirby_dream_land import GameWrapperKirbyDreamLand
 
 class KirbyEnvironment:
     def __init__(self, rom_path: str):
-        # Initialize PyBoy with the Kirby ROM
         self.pyboy = PyBoy(rom_path, window="SDL2", sound=False)
-        
-        # Access the Kirby game wrapper directly without calling it
         self.kirby = self.pyboy.game_wrapper
+        self.kirby.start_game()  # Startet das Spiel
         
-        # Verify we have the correct game wrapper
-        if not isinstance(self.kirby, GameWrapperKirbyDreamLand):
-            raise TypeError("Loaded ROM does not correspond to Kirby's Dream Land.")
-        
-        # Start the game using the wrapper
-        self.kirby.start_game()
+    def get_state(self):
+        """Gibt den aktuellen Zustand von Kirby zurück."""
+        current_position = self.get_kirby_position_from_tiles() or (0, 0)
+        state = [
+            self.kirby.score,
+            self.kirby.health,
+            self.kirby.lives_left,
+            current_position[0],
+            current_position[1]
+        ]
+        return state    
 
-        # Initialize previous state
-        self.previous_score = self.kirby.score
-        self.previous_health = self.kirby.health
-        self.previous_lives = self.kirby.lives_left
+    def get_kirby_position_from_tiles(self):
+        """Sucht in den Tiles nach einem charakteristischen Zeichen für Kirby."""
+        game_area = self.kirby.game_area()  # Holen des 2D-Arrays mit Tiles
+        for y, row in enumerate(game_area):
+            for x, tile in enumerate(row):
+                if tile == 204:  # Beispiel-ID für Kirby-Tile; dies muss angepasst werden
+                    return (x, y)  # Gibt die Position von Kirby zurück
+        return None  # Wenn Kirby nicht gefunden wurde
 
     def calculate_reward(self):
         reward = 0
         current_score = self.kirby.score
         current_health = self.kirby.health
         current_lives = self.kirby.lives_left
+        current_position = self.get_kirby_position_from_tiles()
 
-        # Reward for increased score
-        if current_score > self.previous_score:
-            reward += (current_score - self.previous_score)
+        if current_position and self.previous_position:
+            # Belohnung für Fortschritt nach rechts
+            if current_position[0] > self.previous_position[0]:
+                reward += 5
+            elif current_position[0] < self.previous_position[0]:  # Bestrafung für Rückwärtsbewegung
+                reward -= 5
 
-        # Penalty for losing health
+        # Restliche Berechnungen unverändert
+        if self.kirby.score > self.previous_score:
+            reward += (self.kirby.score - self.previous_score) * 10
+
         if current_health < self.previous_health:
             reward -= (self.previous_health - current_health) * 10
 
-        # Penalty for losing a life
         if current_lives < self.previous_lives:
             reward -= 50
 
-        # Update previous state
         self.previous_score = current_score
         self.previous_health = current_health
         self.previous_lives = current_lives
+        self.previous_position = current_position
 
         return reward
+    def is_near_tile(self, position, tile_position, threshold=5):
+        return abs(position[0] - tile_position[0]) <= threshold and abs(position[1] - tile_position[1]) <= threshold
+
+    def is_near_dangerous_tile(self, position):
+        dangerous_tiles = [(5, 10), (6, 11)]
+        for tile_position in dangerous_tiles:
+            if self.is_near_tile(position, tile_position):
+                return True
+        return False
 
     def step(self, action):
-        # Send the action to the game environment
         self.pyboy.send_input(action)
         self.pyboy.tick()
-
-        # Calculate reward based on new state
         reward = self.calculate_reward()
-
-        # Check if the game is over
         done = self.kirby.game_over()
-
         return reward, done
 
     def reset(self):
-        # Reset the game environment to the initial state
         self.kirby.reset_game()
         self.previous_score = self.kirby.score
         self.previous_health = self.kirby.health
         self.previous_lives = self.kirby.lives_left
-
-    def get_game_area(self):
-        # Get a 2D array representation of the game area
-        return self.kirby.game_area()
+        self.previous_position = self.get_kirby_position_from_tiles()
 
     def close(self):
         self.pyboy.stop()
