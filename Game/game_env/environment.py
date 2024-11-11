@@ -5,7 +5,11 @@ class KirbyEnvironment:
         self.pyboy = PyBoy(rom_path, window="SDL2", sound=False)
         self.kirby = self.pyboy.game_wrapper
         self.kirby.start_game()  # Startet das Spiel
-        
+        self.previous_score = 0
+        self.previous_health = 0
+        self.previous_lives = 0
+        self.previous_position = (0, 0)
+
     def get_state(self):
         """Gibt den aktuellen Zustand von Kirby zurück."""
         current_position = self.get_kirby_position_from_tiles() or (0, 0)
@@ -34,38 +38,41 @@ class KirbyEnvironment:
         current_lives = self.kirby.lives_left
         current_position = self.get_kirby_position_from_tiles()
 
+        # Belohnung für Fortschritt nach rechts
         if current_position and self.previous_position:
-            # Belohnung für Fortschritt nach rechts
-            if current_position[0] > self.previous_position[0]:
+            if current_position[0] > self.previous_position[0]:  
                 reward += 5
-            elif current_position[0] < self.previous_position[0]:  # Bestrafung für Rückwärtsbewegung
+            elif current_position[0] < self.previous_position[0]:  
                 reward -= 5
 
-        # Restliche Berechnungen unverändert
+        # Belohnung für Score-Änderung
         if self.kirby.score > self.previous_score:
             reward += (self.kirby.score - self.previous_score) * 10
 
+        # Bestrafung für verlorene Gesundheit oder Leben
         if current_health < self.previous_health:
             reward -= (self.previous_health - current_health) * 10
 
         if current_lives < self.previous_lives:
             reward -= 50
 
+        # Zusätzliche Belohnung für das Erreichen eines Fortschritts im Level
+        if self.has_reached_level_end():
+            reward += 100  # Belohnung für Levelabschluss
+
+        # Aktualisiere frühere Werte
         self.previous_score = current_score
         self.previous_health = current_health
         self.previous_lives = current_lives
         self.previous_position = current_position
 
         return reward
-    def is_near_tile(self, position, tile_position, threshold=5):
-        return abs(position[0] - tile_position[0]) <= threshold and abs(position[1] - tile_position[1]) <= threshold
 
-    def is_near_dangerous_tile(self, position):
-        dangerous_tiles = [(5, 10), (6, 11)]
-        for tile_position in dangerous_tiles:
-            if self.is_near_tile(position, tile_position):
-                return True
-        return False
+    def has_reached_level_end(self):
+        """Prüft, ob Kirby am Ende des Levels ist (z.B. durch Punktzahl oder Position)."""
+        # Setze hier eine Logik ein, die das Levelende prüft.
+        # Beispielhaft ist eine einfache Bedingung auf den Punktestand gesetzt:
+        return self.kirby.score >= 5000  # Beispiel-Punktzahl für Levelabschluss
 
     def step(self, action):
         self.pyboy.send_input(action)
