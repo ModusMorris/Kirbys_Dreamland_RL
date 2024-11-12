@@ -32,7 +32,7 @@ def main():
         ]
     }
     
-    state_size = 5  # Anzahl der Elemente im Zustand
+    state_size = 5
     
     # Initialize the DDQN Agent with a Replay Memory
     agent = DDQNAgent(state_size, len(action_mapping))
@@ -50,14 +50,18 @@ def main():
             action_idx = agent.select_action(state)
             action = action_mapping[action_idx]
             
-            # Führe die Aktion aus
-            for event in action:
-                env.pyboy.send_input(event)
-            
-            # Schritt im Spiel
-            reward, done = env.step(action_idx)
+            # Führe die Aktion für mehrere Ticks aus
+            for _ in range(5):  # Führt dieselbe Aktion für 5 Ticks aus, um die CPU zu entlasten
+                for event in action:
+                    env.pyboy.send_input(event)
+                _, reward, done, _ = env.step(action_idx)  # Beobachtung und Info werden ignoriert
+                
+                # Aktualisiere Belohnung
+                total_reward += reward
+                if done:
+                    break
+
             next_state = env.get_state()
-            total_reward += reward
 
             # Speichere Erfahrung
             agent.remember(state, action_idx, reward, next_state, done)
@@ -78,32 +82,27 @@ def main():
 
     # Evaluierung des trainierten Modells
     print("\nStarting evaluation...")
-    agent.epsilon = 0  # Setze epsilon auf 0, um nur das gelernte Verhalten zu nutzen
+    agent.epsilon = 0
     state = env.reset()
     total_reward = 0
     done = False
 
     while not done:
-        # Wähle Aktion nur basierend auf dem gelernten Modell
         action_idx = agent.select_action(state)
         action = action_mapping[action_idx]
 
-        # Führe die Aktion aus
-        for event in action:
-            env.pyboy.send_input(event)
-        
-        # Schritt im Spiel
-        reward, done = env.step(action_idx)
+        for _ in range(5):  # Gleicher Ansatz während der Evaluierung
+            for event in action:
+                env.pyboy.send_input(event)
+            _, reward, done, _ = env.step(action_idx)
+            total_reward += reward
+            if done:
+                break
+
         next_state = env.get_state()
-        total_reward += reward
-        
-        # Aktualisiere Zustand
         state = next_state
 
-        if done:
-            print(f"Evaluation ended. Total Reward: {total_reward}")
-            break
-
+    print(f"Evaluation ended. Total Reward: {total_reward}")
     env.close()
     print("PyBoy has been successfully closed.")
 
