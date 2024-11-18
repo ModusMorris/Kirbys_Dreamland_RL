@@ -1,27 +1,77 @@
 import os
 import time
+from tqdm import tqdm
+import torch.multiprocessing as mp
+from torch.utils.tensorboard import SummaryWriter
 from Game.game_env.environment import KirbyEnvironment
 from Game.agents.agent import DDQNAgent
 from pyboy.utils import WindowEvent
-from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
+
+
+def train_process(rank, model_path, frame_shape, game_area_shape, action_size, action_mapping, log_dir, num_epochs, max_steps_per_episode):
+    writer = SummaryWriter(log_dir=f"{log_dir}_worker_{rank}")
+    env = KirbyEnvironment("Game/Kirby.gb", action_mapping)
+    agent = DDQNAgent(frame_shape, game_area_shape, action_size, model_path=model_path)
+    burn_in_steps = 2000
+
+    total_steps = 0
+    with tqdm(total=num_epochs, desc=f"Worker {rank} - Training Epochs") as epoch_bar:
+        for epoch in range(num_epochs):
+            state = env.reset()
+            total_reward = 0
+            steps = 0
+            start_time = time.time()
+            done = False
+
+            with tqdm(total=max_steps_per_episode, desc=f"Worker {rank} - Epoch {epoch + 1} Steps", leave=False) as step_bar:
+                while not done and steps < max_steps_per_episode:
+                    # Aktion auswählen
+                    action_idx = agent.select_action(state)
+                    next_state, reward, done, info = env.step(action_idx)
+
+                    # Wenn ein Leben verloren wurde, breche die Episode ab
+                    if info.get("life_lost", False):
+                        print(f"Worker {rank} | Epoch {epoch + 1} | Kirby hat ein Leben verloren.")
+                        done = True  # Beende die Episode
+
+                    agent.remember(state, action_idx, reward, next_state, done)
+                    state = next_state
+                    total_reward += reward
+                    steps += 1
+                    total_steps += 1
+
+                    # Training alle 10 Schritte nach Burn-in
+                    if steps % 10 == 0 and len(agent.memory) > burn_in_steps:
+                        agent.train(epoch)
+
+                    # Update des Fortschritts
+                    step_bar.update(1)
+
+                # Epochendetails loggen
+                elapsed_time = time.time() - start_time
+                writer.add_scalar("Reward/Total", total_reward, epoch)
+                writer.add_scalar("Steps/Episode Length", steps, epoch)
+                writer.add_scalar("Time/Epoch Duration", elapsed_time, epoch)
+
+                print(f"Worker {rank} | Epoch {epoch + 1}/{num_epochs} | Reward: {total_reward:.2f} | Steps: {steps} | Time: {elapsed_time:.2f}s")
+
+                epoch_bar.update(1)
+
+                # Epoche neu starten, wenn Leben verloren wurde
+                if info.get("life_lost", False):
+                    break
+
+    # Modell und Logs speichern
+    agent.save_model(f"{model_path}_worker_{rank}")
+    writer.close()
+
 
 def main():
-    # Pfad zu den TensorBoard-Logs
+    model_path = "agent_model.pth"
     log_dir = "runs/kirby_training"
-    writer = SummaryWriter(log_dir)
-
-    # Minimum number of steps to collect experiences before training starts
-    BURN_IN_STEPS = 5000
-
-    # Specify the path to the ROM file
-    rom_path = os.path.join("Game", "Kirby.gb")
-
-    # Create the Kirby environment
-    env = KirbyEnvironment(rom_path)
-    print("Kirby environment successfully created! The game should now be running in the window.")
-
-    # Define possible actions (inklusive kombinierter Aktionen)
+    frame_shape = (4, 20, 16)
+    game_area_shape = (16, 20)
+    action_size = 10
     action_mapping = {
         0: [WindowEvent.PRESS_ARROW_RIGHT],
         1: [WindowEvent.PRESS_ARROW_LEFT],
@@ -29,87 +79,29 @@ def main():
         3: [WindowEvent.PRESS_BUTTON_B],
         4: [WindowEvent.PRESS_ARROW_UP],
         5: [WindowEvent.PRESS_ARROW_DOWN],
-        6: [WindowEvent.PRESS_ARROW_RIGHT, WindowEvent.PRESS_BUTTON_A],  # Rechts + Springen
-        7: [WindowEvent.PRESS_ARROW_RIGHT, WindowEvent.PRESS_BUTTON_B],  # Rechts + Angriff
-        8: [WindowEvent.PRESS_BUTTON_A, WindowEvent.PRESS_ARROW_UP],  # Springen + Aufwärtsbewegung
-        9: [WindowEvent.RELEASE_ARROW_RIGHT, WindowEvent.RELEASE_ARROW_LEFT, WindowEvent.RELEASE_BUTTON_A, WindowEvent.RELEASE_BUTTON_B, WindowEvent.RELEASE_ARROW_UP, WindowEvent.RELEASE_ARROW_DOWN]
+        6: [WindowEvent.PRESS_ARROW_RIGHT, WindowEvent.PRESS_BUTTON_A],
+        7: [WindowEvent.PRESS_ARROW_RIGHT, WindowEvent.PRESS_BUTTON_B],
+        8: [WindowEvent.PRESS_BUTTON_A, WindowEvent.PRESS_ARROW_UP],
+        9: [WindowEvent.RELEASE_ARROW_RIGHT, WindowEvent.RELEASE_ARROW_LEFT,
+            WindowEvent.RELEASE_BUTTON_A, WindowEvent.RELEASE_BUTTON_B,
+            WindowEvent.RELEASE_ARROW_UP, WindowEvent.RELEASE_ARROW_DOWN],
     }
-
-    state_size = 4  # 4 Frames im Stapel
-
-    # Initialize the DDQN Agent with a Replay Memory
-    agent = DDQNAgent(state_size, len(action_mapping), memory_size=50000, batch_size=64)
-
-    # Training für mehrere Epochen
-    num_epochs = 100  # Reduziertes Training für Testzwecke
+    num_epochs = 10
     max_steps_per_episode = 2000
+    num_workers = 1
 
-    # Stelle sicher, dass der Checkpoints-Ordner existiert
-    checkpoint_dir = "checkpoints"
-    if not os.path.exists(checkpoint_dir):
-        os.makedirs(checkpoint_dir)
-    checkpoint_path = os.path.join(checkpoint_dir, "checkpoint_latest.pth")
+    # Multiprocessing
+    mp.set_start_method("spawn")
+    processes = []
+    for rank in range(num_workers):
+        p = mp.Process(target=train_process, args=(
+            rank, model_path, frame_shape, game_area_shape, action_size, action_mapping, log_dir, num_epochs, max_steps_per_episode))
+        p.start()
+        processes.append(p)
 
-    for epoch in tqdm(range(num_epochs), desc="Training Epochs", unit="epoch"):
-        print(f"\nStarting epoch {epoch + 1}/{num_epochs}")
-        state = env.reset()
-        total_reward = 0
-        done = False
-        episode_length = 0
+    for p in processes:
+        p.join()
 
-        # Fortschrittsbalken für die Episodenlänge
-        with tqdm(total=max_steps_per_episode, desc=f"Epoch {epoch + 1} - Episode Progress", unit="step") as episode_progress:
-            while not done and episode_length < max_steps_per_episode:
-
-                # Wähle Aktion
-                action_idx = agent.select_action(state)
-                action = action_mapping[action_idx]
-
-                # Führe die Aktion aus
-                for event in action:
-                    env.pyboy.send_input(event)
-
-                # Schritt im Spiel
-                next_state, reward, done, _ = env.step(action_idx)
-                total_reward += reward
-                episode_length += 1
-
-                # Fortschrittsbalken aktualisieren
-                episode_progress.update(1)
-
-                # Speichere Erfahrung
-                agent.remember(state, action_idx, reward, next_state, done)
-
-                # Aktualisiere Zustand
-                state = next_state
-
-                # Trainiere das Modell erst, wenn genügend Daten gesammelt wurden
-                if len(agent.memory) >= BURN_IN_STEPS and episode_length % 5 == 0:
-                    agent.train(epoch)
-
-            print(f"\nEpisode ended. Reward: {total_reward}, Length: {episode_length}")
-
-            # Protokolliere Metriken im TensorBoard
-            writer.add_scalar("Reward/Total", total_reward, epoch)
-            writer.add_scalar("Epsilon", agent.epsilon, epoch)
-            writer.add_scalar("Episode Length", episode_length, epoch)
-
-        print(f"\nEpoch {epoch + 1} ended. Total Reward: {total_reward}, Episodes: 1")
-
-        # Speichern des Modells nach jeder festgelegten Anzahl von Epochen (z.B. alle 50 Epochen) als Checkpoint
-        if (epoch + 1) % 50 == 0:
-            agent.save_model(checkpoint_path)
-            print(f"Model and memory saved successfully to {checkpoint_path}.")
-
-    # Speichere das endgültige Modell nach Abschluss des Trainings
-    final_model_path = "agent_model.pth"
-    agent.save_model(final_model_path)
-    print(f"Final model saved to {final_model_path}.")
-
-    # Schließen des TensorBoard-Writers
-    writer.close()
-
-    print("Training complete.")
 
 if __name__ == "__main__":
     main()

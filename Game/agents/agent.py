@@ -5,12 +5,60 @@ import torch.optim as optim
 from collections import deque
 import os
 import numpy as np
+import threading
+
+class CombinedModel(nn.Module):
+    def __init__(self, frame_shape, game_area_shape, action_size):
+        super(CombinedModel, self).__init__()
+        # CNN für Frames
+        self.conv_frames = nn.Sequential(
+            nn.Conv2d(frame_shape[0], 32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.Flatten()
+        )
+
+        # Fully Connected Layer für Game Area
+        self.fc_game_area = nn.Sequential(
+            
+            nn.Linear(game_area_shape[0] * game_area_shape[1], 128),  # Eingabedimension berechnet aus game_area_shape
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU()
+        )
+        
+        # Kombinierte Features
+        combined_input_size = self._get_conv_output_size(frame_shape) + 128
+        self.fc_combined = nn.Sequential(
+            nn.Linear(combined_input_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, action_size)
+        )
+
+    def forward(self, frames, game_area):
+        x1 = self.conv_frames(frames)
+        game_area = game_area.view(game_area.size(0), -1)  # Flatten game_area
+        #print(f"Flattened Game Area Shape: {game_area.shape}")  # Debugging
+        x2 = self.fc_game_area(game_area)
+        #print(f"Frames Output Shape: {x1.shape}, Game Area Output Shape: {x2.shape}")  # Debugging
+        x = torch.cat([x1, x2], dim=1)
+        return self.fc_combined(x)
+
+    def _get_conv_output_size(self, shape):
+        with torch.no_grad():
+            dummy_input = torch.zeros(1, *shape)
+            output = self.conv_frames(dummy_input)
+            return output.numel()
+
 
 class DDQNAgent:
-    def __init__(self, state_size, action_size, batch_size=128, gamma=0.99,
-                 lr=1e-3, epsilon_start=1.0, epsilon_end=0.1, epsilon_decay=0.9995,
-                 target_update_frequency=7000, memory_size=5000000, model_path="agent_model.pth", writer=None, **kwargs):
-        self.state_size = state_size
+    def __init__(self, frame_shape, game_area_shape, action_size, batch_size=32, gamma=0.99,
+                 lr=1e-3, epsilon_start=1.0, epsilon_end=0.1, epsilon_decay=0.999,
+                 target_update_frequency=7000, memory_size=500, model_path="agent_model.pth", writer=None, **kwargs):
+        self.frame_shape = frame_shape
+        self.game_area_shape = game_area_shape
         self.action_size = action_size
         self.batch_size = batch_size
         self.gamma = gamma
@@ -26,97 +74,48 @@ class DDQNAgent:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Initialisiere das Modell und das Zielmodell auf dem richtigen Gerät (CPU oder GPU)
-        self.model = self._build_model().to(self.device)
-        self.target_model = self._build_model().to(self.device)
+        self.model = CombinedModel(frame_shape, game_area_shape, action_size).to(self.device)
+        self.target_model = CombinedModel(frame_shape, game_area_shape, action_size).to(self.device)
         self.update_target_model()
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
         self.load_model()
 
-    def _build_model(self):
-        # Berechne die Ausgabegröße der Convolutional Layers, um sie für den Fully Connected Layer zu nutzen
-        conv_output_size = self._get_conv_output_size()
-
-        # Modelldefinition mit Convolutional Layers
-        model = nn.Sequential(
-            nn.Conv2d(4, 64, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Flatten(),
-            nn.Linear(conv_output_size, 256),  # Größere Fully Connected Layer
-            nn.ReLU(),
-            nn.Linear(256, self.action_size)  # Ausgabe: Anzahl der möglichen Aktionen
-        )
-        return model
-
-    def _get_conv_output_size(self):
-        with torch.no_grad():
-            # Definiere die Convolutional Layers separat, damit wir die Dimension berechnen können
-            conv_layers = nn.Sequential(
-                nn.Conv2d(4, 64, kernel_size=3, stride=1, padding=1),
-                nn.ReLU(),
-                nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
-                nn.ReLU(),
-                nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
-                nn.ReLU()
-            ).to(self.device)
-
-            # Berechne die Ausgabegröße nach den Convolutional Layers
-            input_size = (1, 4, 20, 16)  # Stapel von 4 Frames (Batch, Channel, Height, Width)
-            dummy_input = torch.zeros(input_size).to(self.device)
-            output = conv_layers(dummy_input)
-            return output.numel()
-
-
-    def _forward_conv(self, x):
-        # Teile des Convolutional Layers
-        conv_layers = nn.Sequential(
-            nn.Conv2d(4, 64, kernel_size=3, stride=2),  
-            nn.ReLU(),
-            nn.Conv2d(64, 128, kernel_size=3, stride=2),
-            nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, stride=2),
-            nn.ReLU()
-        )
-        conv_layers = conv_layers.to(self.device)
-        return conv_layers(x)
-
     def update_target_model(self):
-        # Aktualisiere die Parameter des Zielmodells mit denen des Hauptmodells
         self.target_model.load_state_dict(self.model.state_dict())
 
     def remember(self, state, action, reward, next_state, done):
-        # Speichere die Erfahrungen im Replay-Speicher
         self.memory.append((state, action, reward, next_state, done))
 
     def select_action(self, state):
-        # Wähle eine Aktion entweder zufällig (Exploration) oder basierend auf dem Modell (Exploitation)
         if random.random() <= self.epsilon:
             return random.randrange(self.action_size)
         else:
-            # Zustand in einen FloatTensor konvertieren und auf die GPU verschieben
-            state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+            frames = torch.FloatTensor(state["frames"]).unsqueeze(0).to(self.device)
+            game_area = torch.FloatTensor(state["game_area"]).unsqueeze(0).to(self.device)
             with torch.no_grad():
-                return torch.argmax(self.model(state)).item()
+                return torch.argmax(self.model(frames, game_area)).item()
 
     def replay(self, current_epoch):
         if len(self.memory) < self.batch_size:
             return
 
         batch = random.sample(self.memory, self.batch_size)
-        states, actions, rewards, next_states, dones = zip(*batch)
+        frames, game_areas, actions, rewards, next_frames, next_game_areas, dones = zip(*[
+            (item["frames"], item["game_area"], action, reward, next_item["frames"], next_item["game_area"], done)
+            for item, action, reward, next_item, done in self.memory
+        ])
 
-        states = torch.FloatTensor(np.array(states)).to(self.device)
-        actions = torch.LongTensor(list(actions)).to(self.device)
-        rewards = torch.FloatTensor(list(rewards)).to(self.device)
-        next_states = torch.FloatTensor(np.array(next_states)).to(self.device)
-        dones = torch.FloatTensor(list(dones)).to(self.device)
+        frames = torch.FloatTensor(np.array(frames)).to(self.device)
+        game_areas = torch.FloatTensor(np.array(game_areas)).to(self.device)
+        actions = torch.LongTensor(actions).to(self.device)
+        rewards = torch.FloatTensor(rewards).to(self.device)
+        next_frames = torch.FloatTensor(np.array(next_frames)).to(self.device)
+        next_game_areas = torch.FloatTensor(np.array(next_game_areas)).to(self.device)
+        dones = torch.FloatTensor(dones).to(self.device)
 
         # Q-Learning Update
-        q_values = self.model(states).gather(1, actions.unsqueeze(1)).squeeze()
-        next_q_values = self.target_model(next_states).max(1)[0]
+        q_values = self.model(frames, game_areas).gather(1, actions.unsqueeze(1)).squeeze()
+        next_q_values = self.target_model(next_frames, next_game_areas).max(1)[0]
         target_q_values = rewards + (self.gamma * next_q_values * (1 - dones))
         loss = nn.MSELoss()(q_values, target_q_values.detach())
 
@@ -125,42 +124,39 @@ class DDQNAgent:
         loss.backward()
         self.optimizer.step()
 
-        # Protokolliere den Verlust ins TensorBoard
         if self.writer is not None:
             self.writer.add_scalar("Loss", loss.item(), current_epoch)
 
-        # Update von epsilon für den Exploration-Exploitations-Ausgleich
         if self.epsilon > self.epsilon_end:
             self.epsilon *= self.epsilon_decay
 
     def train(self, current_epoch):
-        # Trainiere das Modell in kleineren Batches
         for _ in range(10):
             self.replay(current_epoch)
-
-        # Aktualisiere das Zielmodell in regelmäßigen Abständen
-        if len(self.memory) % (self.target_update_frequency) == 0:
+        if len(self.memory) % self.target_update_frequency == 0:
             self.update_target_model()
 
     def save_model(self, checkpoint_path=None):
         if checkpoint_path is None:
             checkpoint_path = self.model_path
 
-        # Speichere nur die Gewichte des Modells und des Zielmodells
         torch.save({
             'model_state_dict': self.model.state_dict(),
             'target_model_state_dict': self.target_model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'epsilon': self.epsilon,
+            'memory': list(self.memory)
         }, checkpoint_path)
-        print(f"Model weights saved successfully to {checkpoint_path}.")
+        print(f"Model weights and optimizer state saved successfully to {checkpoint_path}.")
 
     def load_model(self):
-        # Lade das Modell und den Replay-Speicher, falls vorhanden
         if os.path.exists(self.model_path):
-            checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=True)  # `weights_only=False` ist Standard
+            checkpoint = torch.load(self.model_path, map_location=self.device)
             self.model.load_state_dict(checkpoint['model_state_dict'])
             self.target_model.load_state_dict(checkpoint['target_model_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            self.epsilon = checkpoint['epsilon']
-            self.memory = deque(checkpoint['memory'], maxlen=self.memory.maxlen)
+            self.epsilon = checkpoint.get('epsilon', self.epsilon)
+            self.memory = deque(checkpoint.get('memory', []), maxlen=self.memory.maxlen)
             print("Model and memory loaded successfully.")
-
+        else:
+            print("No checkpoint found. Starting with a new model.")
