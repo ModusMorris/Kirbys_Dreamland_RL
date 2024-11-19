@@ -146,21 +146,32 @@ class DDQNAgent:
         if checkpoint_path is None:
             checkpoint_path = self.model_path
 
-        # Speichere nur die Gewichte des Modells und des Zielmodells
         torch.save({
             'model_state_dict': self.model.state_dict(),
             'target_model_state_dict': self.target_model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),  # Optimizer-Zustand hinzufügen
+            'epsilon': self.epsilon,
+            'memory': list(self.memory)  # Replay-Speicher optional speichern
         }, checkpoint_path)
         print(f"Model weights saved successfully to {checkpoint_path}.")
 
     def load_model(self):
-        # Lade das Modell und den Replay-Speicher, falls vorhanden
         if os.path.exists(self.model_path):
-            checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=True)  # `weights_only=False` ist Standard
+            checkpoint = torch.load(self.model_path, map_location=self.device)
+            
+            # Lade die Modellspezifikationen
             self.model.load_state_dict(checkpoint['model_state_dict'])
             self.target_model.load_state_dict(checkpoint['target_model_state_dict'])
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            self.epsilon = checkpoint['epsilon']
-            self.memory = deque(checkpoint['memory'], maxlen=self.memory.maxlen)
+
+            # Überprüfen, ob der Optimizer-Zustand vorhanden ist
+            if 'optimizer_state_dict' in checkpoint:
+                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            else:
+                print("Warning: 'optimizer_state_dict' not found in checkpoint. Optimizer reinitialized.")
+
+            # Andere Zustände laden
+            self.epsilon = checkpoint.get('epsilon', self.epsilon)
+            self.memory = deque(checkpoint.get('memory', []), maxlen=self.memory.maxlen)
+
             print("Model and memory loaded successfully.")
 

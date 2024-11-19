@@ -21,7 +21,7 @@ def main():
     env = KirbyEnvironment(rom_path)
     print("Kirby environment successfully created! The game should now be running in the window.")
 
-    # Define possible actions (inklusive kombinierter Aktionen)
+    # Define possible actions
     action_mapping = {
         0: [WindowEvent.PRESS_ARROW_RIGHT],
         1: [WindowEvent.PRESS_ARROW_LEFT],
@@ -29,22 +29,23 @@ def main():
         3: [WindowEvent.PRESS_BUTTON_B],
         4: [WindowEvent.PRESS_ARROW_UP],
         5: [WindowEvent.PRESS_ARROW_DOWN],
-        6: [WindowEvent.PRESS_ARROW_RIGHT, WindowEvent.PRESS_BUTTON_A],  # Rechts + Springen
-        7: [WindowEvent.PRESS_ARROW_RIGHT, WindowEvent.PRESS_BUTTON_B],  # Rechts + Angriff
-        8: [WindowEvent.PRESS_BUTTON_A, WindowEvent.PRESS_ARROW_UP],  # Springen + Aufwärtsbewegung
-        9: [WindowEvent.RELEASE_ARROW_RIGHT, WindowEvent.RELEASE_ARROW_LEFT, WindowEvent.RELEASE_BUTTON_A, WindowEvent.RELEASE_BUTTON_B, WindowEvent.RELEASE_ARROW_UP, WindowEvent.RELEASE_ARROW_DOWN]
+        6: [WindowEvent.PRESS_ARROW_RIGHT, WindowEvent.PRESS_BUTTON_A],  # Right + Jump
+        7: [WindowEvent.PRESS_ARROW_RIGHT, WindowEvent.PRESS_BUTTON_B],  # Right + Attack
+        8: [WindowEvent.PRESS_BUTTON_A, WindowEvent.PRESS_ARROW_UP],  # Jump + Up
+        9: [WindowEvent.RELEASE_ARROW_RIGHT, WindowEvent.RELEASE_ARROW_LEFT,
+            WindowEvent.RELEASE_BUTTON_A, WindowEvent.RELEASE_BUTTON_B,
+            WindowEvent.RELEASE_ARROW_UP, WindowEvent.RELEASE_ARROW_DOWN]
     }
 
-    state_size = 4  # 4 Frames im Stapel
-
-    # Initialize the DDQN Agent with a Replay Memory
+    # Initialize the DDQN Agent
+    state_size = env.observation_space.shape[0]
     agent = DDQNAgent(state_size, len(action_mapping), memory_size=50000, batch_size=64)
 
-    # Training für mehrere Epochen
-    num_epochs = 100  # Reduziertes Training für Testzwecke
+    # Training settings
+    num_epochs = 100  # Gesamtzahl der Epochen
     max_steps_per_episode = 2000
 
-    # Stelle sicher, dass der Checkpoints-Ordner existiert
+    # Create checkpoint directory
     checkpoint_dir = "checkpoints"
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir)
@@ -54,13 +55,11 @@ def main():
         print(f"\nStarting epoch {epoch + 1}/{num_epochs}")
         state = env.reset()
         total_reward = 0
-        done = False
         episode_length = 0
+        done = False
 
-        # Fortschrittsbalken für die Episodenlänge
         with tqdm(total=max_steps_per_episode, desc=f"Epoch {epoch + 1} - Episode Progress", unit="step") as episode_progress:
             while not done and episode_length < max_steps_per_episode:
-
                 # Wähle Aktion
                 action_idx = agent.select_action(state)
                 action = action_mapping[action_idx]
@@ -70,7 +69,7 @@ def main():
                     env.pyboy.send_input(event)
 
                 # Schritt im Spiel
-                next_state, reward, done, _ = env.step(action_idx)
+                next_state, reward, done, info = env.step(action_idx)
                 total_reward += reward
                 episode_length += 1
 
@@ -87,20 +86,22 @@ def main():
                 if len(agent.memory) >= BURN_IN_STEPS and episode_length % 5 == 0:
                     agent.train(epoch)
 
+                # Wenn der Boss erreicht wurde, die Epoche beenden
+                if info.get("level_complete"):  # Boss erreicht
+                    print("Boss erreicht! Epoche wird beendet und Level neu gestartet...")
+                    done = True  # Epoche beenden
+
             print(f"\nEpisode ended. Reward: {total_reward}, Length: {episode_length}")
 
-            # Protokolliere Metriken im TensorBoard
-            writer.add_scalar("Reward/Total", total_reward, epoch)
-            writer.add_scalar("Epsilon", agent.epsilon, epoch)
-            writer.add_scalar("Episode Length", episode_length, epoch)
+        # Umgebung zurücksetzen
+        state = env.reset()
+        print(f"\nEpoch {epoch + 1} ended. Total Reward: {total_reward}")
 
-        print(f"\nEpoch {epoch + 1} ended. Total Reward: {total_reward}, Episodes: 1")
-
-        # Speichern des Modells nach jeder festgelegten Anzahl von Epochen (z.B. alle 50 Epochen) als Checkpoint
+        # Speichern des Modells nach jeder festgelegten Anzahl von Epochen
         if (epoch + 1) % 50 == 0:
             agent.save_model(checkpoint_path)
             print(f"Model and memory saved successfully to {checkpoint_path}.")
-
+        
     # Speichere das endgültige Modell nach Abschluss des Trainings
     final_model_path = "agent_model.pth"
     agent.save_model(final_model_path)
