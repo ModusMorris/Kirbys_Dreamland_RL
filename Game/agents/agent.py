@@ -8,8 +8,8 @@ import numpy as np
 
 class DDQNAgent:
     def __init__(self, state_size, action_size, batch_size=128, gamma=0.99,
-                 lr=1e-3, epsilon_start=1.0, epsilon_end=0.1, epsilon_decay=0.9995,
-                 target_update_frequency=7000, memory_size=5000000, model_path="agent_model.pth", writer=None, **kwargs):
+                 lr=1e-4, epsilon_start=1.0, epsilon_end=0.1, epsilon_decay=0.9995,
+                 target_update_frequency=1000, memory_size=500000, model_path="agent_model.pth", writer=None, **kwargs):
         self.state_size = state_size
         self.action_size = action_size
         self.batch_size = batch_size

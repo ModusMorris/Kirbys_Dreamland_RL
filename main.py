@@ -1,5 +1,6 @@
 import os
 import time
+from datetime import datetime
 from Game.game_env.environment import KirbyEnvironment
 from Game.agents.agent import DDQNAgent
 from pyboy.utils import WindowEvent
@@ -7,12 +8,13 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
 def main():
-    # Pfad zu den TensorBoard-Logs
-    log_dir = "runs/kirby_training"
+    # Erstelle einen eindeutigen Ordner für die Logs
+    current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_dir = f"runs/kirby_training_{current_time}"
     writer = SummaryWriter(log_dir)
 
     # Minimum number of steps to collect experiences before training starts
-    BURN_IN_STEPS = 5000
+    BURN_IN_STEPS = 0
 
     # Specify the path to the ROM file
     rom_path = os.path.join("Game", "Kirby.gb")
@@ -42,14 +44,17 @@ def main():
     agent = DDQNAgent(state_size, len(action_mapping), memory_size=50000, batch_size=64)
 
     # Training settings
-    num_epochs = 100  # Gesamtzahl der Epochen
-    max_steps_per_episode = 2000
+    num_epochs = 2000  # Gesamtzahl der Epochen
+    max_steps_per_episode = 500
 
     # Create checkpoint directory
     checkpoint_dir = "checkpoints"
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir)
     checkpoint_path = os.path.join(checkpoint_dir, "checkpoint_latest.pth")
+    
+    # Statistik-Tracking
+    level_completions = 0    
 
     for epoch in tqdm(range(num_epochs), desc="Training Epochs", unit="epoch"):
         print(f"\nStarting epoch {epoch + 1}/{num_epochs}")
@@ -57,6 +62,7 @@ def main():
         total_reward = 0
         episode_length = 0
         done = False
+        level_completed = False
 
         with tqdm(total=max_steps_per_episode, desc=f"Epoch {epoch + 1} - Episode Progress", unit="step") as episode_progress:
             while not done and episode_length < max_steps_per_episode:
@@ -83,16 +89,29 @@ def main():
                 state = next_state
 
                 # Trainiere das Modell erst, wenn genügend Daten gesammelt wurden
-                if len(agent.memory) >= BURN_IN_STEPS and episode_length % 5 == 0:
+                if len(agent.memory) >= BURN_IN_STEPS:
                     agent.train(epoch)
 
                 # Wenn der Boss erreicht wurde, die Epoche beenden
                 if info.get("level_complete"):  # Boss erreicht
+                    level_completed = True
+                    level_completions += 1
                     print("Boss erreicht! Epoche wird beendet und Level neu gestartet...")
                     done = True  # Epoche beenden
 
             print(f"\nEpisode ended. Reward: {total_reward}, Length: {episode_length}")
 
+        # TensorBoard-Logs schreiben
+        writer.add_scalar("Reward/Total", total_reward, epoch)
+        writer.add_scalar("Episode Length", episode_length, epoch)
+        writer.add_scalar("Epsilon", agent.epsilon, epoch)
+        writer.add_scalar("Level Completions", level_completions, epoch)
+        writer.add_scalar("Exploration/Epsilon", agent.epsilon, epoch)
+        writer.add_scalar("Reward/Average", total_reward / max(1, episode_length), epoch)
+        if level_completed:
+            writer.add_scalar("Reward/Level Completed", total_reward, level_completions)        
+        
+        
         # Umgebung zurücksetzen
         state = env.reset()
         print(f"\nEpoch {epoch + 1} ended. Total Reward: {total_reward}")

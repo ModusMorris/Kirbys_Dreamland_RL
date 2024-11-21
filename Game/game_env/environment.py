@@ -5,9 +5,9 @@ from collections import deque
 from pyboy.utils import WindowEvent
 
 class KirbyEnvironment(gym.Env):
-    def __init__(self, rom_path="Kirbys_Dream_Land.gb"):
+    def __init__(self, rom_path="Kirby.gb"):
         super(KirbyEnvironment, self).__init__()
-        self.pyboy = PyBoy(rom_path, window="SDL2")
+        self.pyboy = PyBoy(rom_path, window="null")
         self.pyboy.set_emulation_speed(0)
         self.kirby = self.pyboy.game_wrapper
 
@@ -69,18 +69,18 @@ class KirbyEnvironment(gym.Env):
         done = self._check_done()  # Kirby verliert alle Leben oder das Spiel ist vorbei
         return next_state, reward, done, {"level_complete": False}
     
-    def _find_star_in_game_area(self):
-        game_area = self.pyboy.game_area()
+    # def _find_star_in_game_area(self):
+    #     game_area = self.pyboy.game_area()
         
-        # Pixelwert des Sterns (dieser Wert muss angepasst werden)
-        STAR_PIXEL_VALUE = 200  # Beispiel: Pixelwert, der den Stern repräsentiert
+    #     # Pixelwert des Sterns (dieser Wert muss angepasst werden)
+    #     STAR_PIXEL_VALUE = 200  # Beispiel: Pixelwert, der den Stern repräsentiert
         
-        # Durchsuche das gesamte `game_area`-Array nach dem Pixelwert
-        for y, row in enumerate(game_area):
-            for x, pixel in enumerate(row):
-                if pixel == STAR_PIXEL_VALUE:  # Stern erkannt
-                    return (x, y)  # Position des Sterns
-        return None  # Kein Stern gefunden
+    #     # Durchsuche das gesamte `game_area`-Array nach dem Pixelwert
+    #     for y, row in enumerate(game_area):
+    #         for x, pixel in enumerate(row):
+    #             if pixel == STAR_PIXEL_VALUE:  # Stern erkannt
+    #                 return (x, y)  # Position des Sterns
+    #     return None  # Kein Stern gefunden'
     
     def _get_observation(self):
         # Retrieve game area as observation
@@ -117,9 +117,13 @@ class KirbyEnvironment(gym.Env):
         if kirby_x < self.previous_position[0]:
             reward -= 1  # Bestrafung für Rückschritt
 
+        # Bestrafung für Bewegung nur entlang der Y-Achse
+        if kirby_x == self.previous_position[0] and kirby_y != self.previous_position[1]:
+            reward -= 2  # Bestrafung für vertikale Bewegung ohne horizontalen Fortschrit
+
         # Erkennen, ob der Bosskampf begonnen hat
         if boss_health > 0:  # Bosskampf beginnt, wenn der Boss Gesundheit hat
-            reward += 100  # Hohe Belohnung für Levelabschluss
+            reward += 500  # Hohe Belohnung für Levelabschluss
             self.kirby.reset_game()
             level_complete = True
 

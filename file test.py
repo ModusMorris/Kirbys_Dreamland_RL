@@ -27,7 +27,7 @@ while pyboy.tick():
     #pyboy.game_wrapper.
     #print(sprite[2:])
     #game = pyboy.game_wrapper.
-    print(kirbyx)
+    print(game_wrapper)
     pass
 
 # Emulator beenden, nachdem das Fenster geschlossen wurde
