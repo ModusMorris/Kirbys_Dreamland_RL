@@ -9,7 +9,7 @@ test.py
 test.ipynb
 .vscode/
 data/
-
+*.pth
 # Byte-compiled / optimized / DLL files
 __pycache__/
 .ipynb_checkpoints
