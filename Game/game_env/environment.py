@@ -4,10 +4,11 @@ import numpy as np
 from collections import deque
 from pyboy.utils import WindowEvent
 
+
 class KirbyEnvironment(gym.Env):
     def __init__(self, rom_path="Kirby.gb"):
         super(KirbyEnvironment, self).__init__()
-        self.pyboy = PyBoy(rom_path, window="null")
+        self.pyboy = PyBoy(rom_path, window="SDL2")
         self.pyboy.set_emulation_speed(0)
         self.kirby = self.pyboy.game_wrapper
 
@@ -28,11 +29,18 @@ class KirbyEnvironment(gym.Env):
         self.previous_lives = None
         self.previous_score = None
         self.previous_position = (0, 0)
+        self.previous_boss_health = None
+        self.previous_level_progress = None
+        self.previous_game_state = 1
+        self.y_axis_steps = 0  # Neu: Anzahl der Schritte nur auf der y-Achse
 
-    def reset(self):
-        if not self.pyboy.tick():
-            self.kirby.start_game()
+    def IsBossActive(self):
+        #Prüfe ob Boss aktiv ist
+        current_boss_health = self.pyboy.memory[0xD093]
+        return current_boss_health > 0
 
+    def reset(self):     
+        self.kirby.reset_game()
         self.frame_stack.clear()
 
         # Initialisiere den Frame-Stack mit 4 identischen Frames
@@ -45,7 +53,11 @@ class KirbyEnvironment(gym.Env):
         self.previous_lives = self.kirby.lives_left
         self.previous_score = self.kirby.score
         self.previous_position = (self.pyboy.memory[0xD05C], self.pyboy.memory[0xD05D])
-
+        self.previous_boss_health = self.pyboy.memory[0xD093]
+        self.previous_level_progress = self._calculate_level_progress()
+        self.previous_game_state = self.pyboy.memory[0xD02C] = 1
+        self.y_axis_steps = 0  # Zurücksetzen der y-Achsen-Schritte
+        
         return np.stack(self.frame_stack, axis=0)
 
     def step(self, action):
@@ -69,18 +81,6 @@ class KirbyEnvironment(gym.Env):
         done = self._check_done()  # Kirby verliert alle Leben oder das Spiel ist vorbei
         return next_state, reward, done, {"level_complete": False}
     
-    # def _find_star_in_game_area(self):
-    #     game_area = self.pyboy.game_area()
-        
-    #     # Pixelwert des Sterns (dieser Wert muss angepasst werden)
-    #     STAR_PIXEL_VALUE = 200  # Beispiel: Pixelwert, der den Stern repräsentiert
-        
-    #     # Durchsuche das gesamte `game_area`-Array nach dem Pixelwert
-    #     for y, row in enumerate(game_area):
-    #         for x, pixel in enumerate(row):
-    #             if pixel == STAR_PIXEL_VALUE:  # Stern erkannt
-    #                 return (x, y)  # Position des Sterns
-    #     return None  # Kein Stern gefunden'
     
     def _get_observation(self):
         # Retrieve game area as observation
@@ -98,53 +98,103 @@ class KirbyEnvironment(gym.Env):
         if action < len(actions):
             self.pyboy.send_input(actions[action])
         self.pyboy.tick()
+        
+    def _calculate_level_progress(self):
+        screen_x_position = self.pyboy.memory[0xD053]
+        kirby_x_position = self.pyboy.memory[0xD05C]
+        scx = (screen_x_position * 16 + kirby_x_position)
+        return scx
 
     def _calculate_reward(self):
-        kirby_x = self.pyboy.memory[0xD05C]
-        kirby_y = self.pyboy.memory[0xD05D]
-        boss_health = self.pyboy.memory[0xD093]  # Gesundheitsstatus des Bosses
         current_health = self.kirby.health
         current_lives = self.kirby.lives_left
         current_score = self.kirby.score
+        current_boss_health = self.pyboy.memory[0xD093]
+        current_game_state = self.pyboy.memory[0xD02C]
+        current_level_progress = self._calculate_level_progress()
+        current_position = (self.pyboy.memory[0xD05C], self.pyboy.memory[0xD05D])
+        kirby_x_position = self.pyboy.memory[0xD05C]
         reward = 0
         level_complete = False
+        
 
-        # Belohnung für Bewegung nach rechts (Fortschritt im Level)
-        if kirby_x > self.previous_position[0]:
-            reward += 1  # Fortschrittsbelohnung
-            
-        # Bestrafung für Bewegung nach links
-        if kirby_x < self.previous_position[0]:
-            reward -= 1  # Bestrafung für Rückschritt
+        # 1. Boss besiegt
+        if current_boss_health == 0 and self.previous_boss_health > 0:
+            print("Boss besiegt")
+            #level_complete = True
+            reward += 10000
 
-        # Bestrafung für Bewegung nur entlang der Y-Achse
-        if kirby_x == self.previous_position[0] and kirby_y != self.previous_position[1]:
-            reward -= 2  # Bestrafung für vertikale Bewegung ohne horizontalen Fortschrit
+        # 2. Schaden am Boss
+        if current_boss_health < self.previous_boss_health:
+            print("Boss schaden gemacht")
+            reward += 1000
 
-        # Erkennen, ob der Bosskampf begonnen hat
-        if boss_health > 0:  # Bosskampf beginnt, wenn der Boss Gesundheit hat
-            reward += 500  # Hohe Belohnung für Levelabschluss
+        # 3. Verlust von einem Leben
+        if current_lives < self.previous_lives:
+            reward -= 3500
+            print("Auaa -3500")
             self.kirby.reset_game()
             level_complete = True
 
-        # Bestrafung für Gesundheitsverlust
+        # 4. Verlust von HP 
         if current_health < self.previous_health:
-            health_loss = self.previous_health - current_health
-            reward -= 10 * health_loss  # Bestrafung für jeden verlorenen Gesundheitsbalken
+            reward -= 10
 
-        # Bestrafung für Verlust eines Lebens
-        if current_lives < self.previous_lives:
-            reward -= 50  # Starke Bestrafung
-            level_complete = True  # Level wird beendet, wenn ein Leben verloren wird
+        # 5. Bewegung nach links
+        if current_level_progress != self.previous_level_progress and kirby_x_position == 68:
+            #print("nach links")
+            reward -= 5
+
+        # 6. Bewegung nach rechts
+        if kirby_x_position == 76:
+            #print("nach rechts")
+            #print(kirby_x_position)
+            reward += 10
+        
+        # 7. Kiry steht still
+        if current_level_progress == self.previous_level_progress:
+            reward-= 1
+
+        # 8.Kirby steht still auf der x-Achse
+        if current_position[0] == self.previous_position[0]:
+            # Prüfen, ob Bewegung nur auf der y-Achse stattfindet
+            if current_position[1] != self.previous_position[1]:
+                self.y_axis_steps += 1
+                
+            else:
+                self.y_axis_steps = 0  # Zurücksetzen, wenn er sich bewegt
+
+            # Bestrafe, wenn er zu viele Schritte nur auf der y-Achse gemacht hat
+            if self.y_axis_steps > 200:
+                reward -= 30
+                self.y_axis_steps = 0  # Zurücksetzen nach Bestrafung
+        else:
+            self.y_axis_steps = 0  # Zurücksetzen, wenn er sich horizontal bewegt
+
+        # 9. Punktzahl erhöhen
+        if current_score > self.previous_score:
+            print("Gegner erledigt")
+            reward += 5
+
+        # 10. Warpstar erreicht
+        if current_health > 0 and current_game_state == 6 and self.previous_game_state != 6:
+            print(current_game_state)
+            print("Warpstar erreicht")
+            level_complete = True
+            reward += 10000
+            #self.kirby.reset_game()
+            
 
         # Aktualisierung der Zustände
-        self.previous_position = (kirby_x, kirby_y)
         self.previous_health = current_health
         self.previous_lives = current_lives
         self.previous_score = current_score
+        self.previous_boss_health = current_boss_health
+        self.previous_level_progress = current_level_progress
+        self.previous_game_state = current_game_state
+        self.previous_position = current_position
 
         return reward, level_complete
-
 
 
     def _check_done(self):

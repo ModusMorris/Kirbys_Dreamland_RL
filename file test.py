@@ -20,6 +20,7 @@ while pyboy.tick():
     x= pyboy.memory[0xD053]
     kirbyx = pyboy.memory[0xD05C]
     kirbyy = pyboy.memory[0xD05D]
+    game_state = pyboy.memory[0xD02C]
     #+pyboy.game_wrapper.s
     lives = pyboy.game_wrapper.lives_left
     game_wrapper = pyboy.game_area() #damit bekomme ich das array worin sich die daten befidnen kirby ist 2 und 18 anfangs auf achse 10
@@ -27,7 +28,7 @@ while pyboy.tick():
     #pyboy.game_wrapper.
     #print(sprite[2:])
     #game = pyboy.game_wrapper.
-    print(game_wrapper)
+    print(game_state)
     pass
 
 # Emulator beenden, nachdem das Fenster geschlossen wurde

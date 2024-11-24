@@ -1,5 +1,6 @@
 import os
 import time
+import signal  # Neu: Für Signal-Handling
 from datetime import datetime
 from Game.game_env.environment import KirbyEnvironment
 from Game.agents.agent import DDQNAgent
@@ -7,14 +8,27 @@ from pyboy.utils import WindowEvent
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
+# Globale Variable für den Agenten
+agent = None
+
+def handle_exit_signal(signum, frame):
+    print("\nAbbruchsignal empfangen. Speichere Modell...")
+    if agent is not None:
+        final_model_path = "agent_model.pth"
+        agent.save_model(final_model_path)
+        print(f"Modell erfolgreich gespeichert unter {final_model_path}.")
+    exit(0)
+
 def main():
+    global agent  # Für Signal-Handler zugänglich
+    # Signal-Handler für sauberes Beenden einrichten
+    signal.signal(signal.SIGINT, handle_exit_signal)
+    signal.signal(signal.SIGTERM, handle_exit_signal)
+
     # Erstelle einen eindeutigen Ordner für die Logs
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_dir = f"runs/kirby_training_{current_time}"
     writer = SummaryWriter(log_dir)
-
-    # Minimum number of steps to collect experiences before training starts
-    BURN_IN_STEPS = 0
 
     # Specify the path to the ROM file
     rom_path = os.path.join("Game", "Kirby.gb")
@@ -31,12 +45,12 @@ def main():
         3: [WindowEvent.PRESS_BUTTON_B],
         4: [WindowEvent.PRESS_ARROW_UP],
         5: [WindowEvent.PRESS_ARROW_DOWN],
-        6: [WindowEvent.PRESS_ARROW_RIGHT, WindowEvent.PRESS_BUTTON_A],  # Right + Jump
-        7: [WindowEvent.PRESS_ARROW_RIGHT, WindowEvent.PRESS_BUTTON_B],  # Right + Attack
-        8: [WindowEvent.PRESS_BUTTON_A, WindowEvent.PRESS_ARROW_UP],  # Jump + Up
-        9: [WindowEvent.RELEASE_ARROW_RIGHT, WindowEvent.RELEASE_ARROW_LEFT,
-            WindowEvent.RELEASE_BUTTON_A, WindowEvent.RELEASE_BUTTON_B,
-            WindowEvent.RELEASE_ARROW_UP, WindowEvent.RELEASE_ARROW_DOWN]
+        # 6: [WindowEvent.PRESS_ARROW_RIGHT, WindowEvent.PRESS_BUTTON_A],  # Right + Jump
+        # 7: [WindowEvent.PRESS_ARROW_RIGHT, WindowEvent.PRESS_BUTTON_B],  # Right + Attack
+        # 8: [WindowEvent.PRESS_BUTTON_A, WindowEvent.PRESS_ARROW_UP],  # Jump + Up
+          6: [WindowEvent.RELEASE_ARROW_RIGHT, WindowEvent.RELEASE_ARROW_LEFT,
+             WindowEvent.RELEASE_BUTTON_A, WindowEvent.RELEASE_BUTTON_B,
+             WindowEvent.RELEASE_ARROW_UP, WindowEvent.RELEASE_ARROW_DOWN]
     }
 
     # Initialize the DDQN Agent
@@ -44,8 +58,8 @@ def main():
     agent = DDQNAgent(state_size, len(action_mapping), memory_size=50000, batch_size=64)
 
     # Training settings
-    num_epochs = 2000  # Gesamtzahl der Epochen
-    max_steps_per_episode = 500
+    num_epochs = 1000  # Gesamtzahl der Epochen
+    max_steps_per_episode = 3000
 
     # Create checkpoint directory
     checkpoint_dir = "checkpoints"
@@ -88,15 +102,14 @@ def main():
                 # Aktualisiere Zustand
                 state = next_state
 
-                # Trainiere das Modell erst, wenn genügend Daten gesammelt wurden
-                if len(agent.memory) >= BURN_IN_STEPS:
-                    agent.train(epoch)
+                #Trainiere Model
+                agent.train(epoch)
 
-                # Wenn der Boss erreicht wurde, die Epoche beenden
+                # Wenn der Boss oder Warpstar erreicht wurde, die Epoche beenden
                 if info.get("level_complete"):  # Boss erreicht
                     level_completed = True
                     level_completions += 1
-                    print("Boss erreicht! Epoche wird beendet und Level neu gestartet...")
+                    print("Level Geschafft, Epoche beenden")
                     done = True  # Epoche beenden
 
             print(f"\nEpisode ended. Reward: {total_reward}, Length: {episode_length}")
@@ -111,10 +124,12 @@ def main():
         if level_completed:
             writer.add_scalar("Reward/Level Completed", total_reward, level_completions)        
         
+       
+        print(f"\nEpoch {epoch + 1} ended. Total Reward: {total_reward}")
         
         # Umgebung zurücksetzen
         state = env.reset()
-        print(f"\nEpoch {epoch + 1} ended. Total Reward: {total_reward}")
+        total_reward = 0  # **Wieder sicherstellen, dass total_reward zurückgesetzt wird**
 
         # Speichern des Modells nach jeder festgelegten Anzahl von Epochen
         if (epoch + 1) % 50 == 0:
