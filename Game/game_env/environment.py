@@ -71,15 +71,18 @@ class KirbyEnvironment(gym.Env):
         next_state = np.stack(self.frame_stack, axis=0)
 
         # Belohnung berechnen und überprüfen, ob das Level abgeschlossen ist
-        reward, level_complete = self._calculate_reward()
+        reward, level_complete, life_lost = self._calculate_reward()
 
         # Behandle Boss-Erreichen und Lebensverlust
         if level_complete:
             return next_state, reward, True, {"level_complete": True}
+        
+        if life_lost:
+            return next_state, reward, True, {"life_lost": True, "level_complete": False}
 
         # Standard-Fall: Weitertrainieren
         done = self._check_done()  # Kirby verliert alle Leben oder das Spiel ist vorbei
-        return next_state, reward, done, {"level_complete": False}
+        return next_state, reward, done, {"level_complete": False,  "life_lost": False}
     
     
     def _get_observation(self):
@@ -116,7 +119,7 @@ class KirbyEnvironment(gym.Env):
         kirby_x_position = self.pyboy.memory[0xD05C]
         reward = 0
         level_complete = False
-        
+        life_lost = False
 
         # 1. Boss besiegt
         if current_boss_health == 0 and self.previous_boss_health > 0:
@@ -134,7 +137,7 @@ class KirbyEnvironment(gym.Env):
             reward -= 3500
             print("Auaa -3500")
             self.kirby.reset_game()
-            level_complete = True
+            life_lost = True
 
         # 4. Verlust von HP 
         if current_health < self.previous_health:
@@ -194,7 +197,7 @@ class KirbyEnvironment(gym.Env):
         self.previous_game_state = current_game_state
         self.previous_position = current_position
 
-        return reward, level_complete
+        return reward, level_complete, life_lost
 
 
     def _check_done(self):
