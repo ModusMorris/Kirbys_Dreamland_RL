@@ -112,9 +112,8 @@ def main():
                     print("Level Geschafft, Epoche beenden")
                     done = True  # Epoche beenden
                     #Epoche wird beendet wenn Kirby stirbt
-                elif info.get("level_complete"):
-                    level_completions += 1
-                    print("Level geschafft, Epoche wird beendet.")
+                elif info.get("life_lost"):
+                    print("Kirby hat ein Leben verloren! Epoche wird beendet.")
                     done = True
 
             print(f"\nEpisode ended. Reward: {total_reward}, Length: {episode_length}")
