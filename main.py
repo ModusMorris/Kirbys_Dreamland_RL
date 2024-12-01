@@ -8,6 +8,7 @@ from pyboy.utils import WindowEvent
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
+
 # Globale Variable für den Agenten
 agent = None
 
@@ -58,7 +59,7 @@ def main():
     agent = DDQNAgent(state_size, len(action_mapping), memory_size=50000, batch_size=64)
 
     # Training settings
-    num_epochs = 1000  # Gesamtzahl der Epochen
+    num_epochs = 8000  # Gesamtzahl der Epochen
     max_steps_per_episode = 3000
 
     # Create checkpoint directory

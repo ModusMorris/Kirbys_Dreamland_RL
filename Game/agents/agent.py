@@ -6,9 +6,12 @@ from collections import deque
 import numpy as np
 import os
 
+
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+
 class DDQNAgent:
     def __init__(self, state_size, action_size, batch_size=256, gamma=0.97,
-                 lr=1e-4, epsilon_start=1.0, epsilon_end=0.1, epsilon_decay=0.99999975,
+                 lr=1e-4, epsilon_start=1.0, epsilon_end=0.1, epsilon_decay=0.999999975,
                  target_update_frequency=5000, memory_size=500000, model_path="agent_model.pth", writer=None, **kwargs):
         self.state_size = state_size
         self.action_size = action_size
@@ -34,7 +37,7 @@ class DDQNAgent:
 
     def _build_model(self):
         # Berechne die Ausgabegröße der Convolutional Layers, um sie für den Fully Connected Layer zu nutzen
-        conv_output_size = self._get_conv_output_size()
+        #conv_output_size = self._get_conv_output_size()
 
         # Modelldefinition mit Convolutional Layers
         model = nn.Sequential(
@@ -63,22 +66,22 @@ class DDQNAgent:
         # )
         # return model
     
-    def _get_conv_output_size(self):
-        with torch.no_grad():
-            conv_layers = nn.Sequential(
-                nn.Conv2d(4, 32, kernel_size=3, stride=1, padding=1),
-                nn.ReLU(),
-                nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
-                nn.ReLU(),
-                nn.Flatten(),
-                nn.Linear(64 * 10 * 8, 128),  # Angepasste Fully-Connected-Schicht
-                nn.ReLU(),
-                nn.Linear(128, self.action_size)
-            ).to(self.device)
-            input_size = (1, 4, 20, 16)  # Stapel von 4 Frames
-            dummy_input = torch.zeros(input_size).to(self.device)
-            output = conv_layers(dummy_input)
-            return output.numel()
+    # def _get_conv_output_size(self):
+    #     with torch.no_grad():
+    #         conv_layers = nn.Sequential(
+    #             nn.Conv2d(4, 32, kernel_size=3, stride=1, padding=1),
+    #             nn.ReLU(),
+    #             nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+    #             nn.ReLU(),
+    #             nn.Flatten(),
+    #             nn.Linear(64 * 10 * 8, 128),  # Angepasste Fully-Connected-Schicht
+    #             nn.ReLU(),
+    #             nn.Linear(128, self.action_size)
+    #         ).to(self.device)
+    #         input_size = (1, 4, 20, 16)  # Stapel von 4 Frames
+    #         dummy_input = torch.zeros(input_size).to(self.device)
+    #         output = conv_layers(dummy_input)
+    #         return output.numel()
 
     def update_target_model(self):
         self.target_model.load_state_dict(self.model.state_dict())

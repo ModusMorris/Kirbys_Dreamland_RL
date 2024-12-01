@@ -8,7 +8,7 @@ from pyboy.utils import WindowEvent
 class KirbyEnvironment(gym.Env):
     def __init__(self, rom_path="Kirby.gb"):
         super(KirbyEnvironment, self).__init__()
-        self.pyboy = PyBoy(rom_path, window="SDL2")
+        self.pyboy = PyBoy(rom_path, window="null")
         self.pyboy.set_emulation_speed(0)
         self.kirby = self.pyboy.game_wrapper
 
@@ -134,8 +134,8 @@ class KirbyEnvironment(gym.Env):
 
         # 3. Verlust von einem Leben
         if current_lives < self.previous_lives:
-            reward -= 3500
-            print("Auaa -3500")
+            reward -= 5000
+            #print("Auaa -5000")
             self.kirby.reset_game()
             life_lost = True
 
@@ -169,14 +169,14 @@ class KirbyEnvironment(gym.Env):
 
             # Bestrafe, wenn er zu viele Schritte nur auf der y-Achse gemacht hat
             if self.y_axis_steps > 200:
-                reward -= 30
+                reward -= 40
                 self.y_axis_steps = 0  # Zurücksetzen nach Bestrafung
         else:
             self.y_axis_steps = 0  # Zurücksetzen, wenn er sich horizontal bewegt
 
         # 9. Punktzahl erhöhen
         if current_score > self.previous_score:
-            print("Gegner erledigt")
+            #print("Gegner erledigt")
             reward += 5
 
         # 10. Warpstar erreicht
@@ -184,7 +184,7 @@ class KirbyEnvironment(gym.Env):
             print(current_game_state)
             print("Warpstar erreicht")
             level_complete = True
-            reward += 10000
+            reward += 20000
             #self.kirby.reset_game()
             
 
