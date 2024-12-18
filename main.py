@@ -12,7 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 agent = None
 
 
-def handle_exit_signal(signum, frame):
+def handle_exit_signal():
     """
     Handles exit signals (e.g., SIGINT, SIGTERM) to ensure the model is saved before exiting.
     """
