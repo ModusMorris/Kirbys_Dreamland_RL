@@ -120,45 +120,41 @@ class KirbyEnvironment(gym.Env):
         current_game_state = self.pyboy.memory[0xD02C]
         current_level_progress = self._calculate_level_progress()
         current_position = (self.pyboy.memory[0xD05C], self.pyboy.memory[0xD05D])
-        kirby_x_position = self.pyboy.memory[0xD05C]
         reward = 0
         level_complete = False
         life_lost = False
 
-        # 1. Boss defeated
+        # 1. Progression Reward
+        progress_reward = max(0, current_level_progress - self.previous_level_progress)
+        reward += progress_reward * 2
+
+        # 2. Boss defeated
         if current_boss_health == 0 and self.previous_boss_health > 0:
             print("Boss defeated")
             reward += 10000
 
-        # 2. Damage dealt to the boss
+        # 3. Damage dealt to the boss
         if current_boss_health < self.previous_boss_health:
             print("Boss damaged")
             reward += 1000
 
-        # 3. Loss of a life
+        # 4. Loss of a life
         if current_lives < self.previous_lives:
-            reward -= 5000
+            reward -= 1000
             self.kirby.reset_game()
             life_lost = True
 
-        # 4. Loss of health
+        # 5. Loss of health
         if current_health < self.previous_health:
-            reward -= 10
-
-        # 5. Moving left
-        if (
-            current_level_progress != self.previous_level_progress
-            and kirby_x_position == 68
-        ):
-            reward -= 5
+            reward -= (self.previous_health - current_health) * 50
 
         # 6. Moving right
-        if kirby_x_position == 76:
+        if current_position[0] > self.previous_position[0]:
             reward += 10
 
         # 7. Kirby stands still
         if current_level_progress == self.previous_level_progress:
-            reward -= 1
+            reward -= 1  # Reduce penalty to encourage exploration
 
         # 8. Kirby only moves on the y-axis
         if current_position[0] == self.previous_position[0]:
@@ -168,14 +164,14 @@ class KirbyEnvironment(gym.Env):
                 self.y_axis_steps = 0
 
             if self.y_axis_steps > 200:
-                reward -= 40
+                reward -= 10
                 self.y_axis_steps = 0
         else:
             self.y_axis_steps = 0
 
         # 9. Score increase
         if current_score > self.previous_score:
-            reward += 5
+            reward += (current_score - self.previous_score) * 0.1
 
         # 10. Warpstar reached
         if (
