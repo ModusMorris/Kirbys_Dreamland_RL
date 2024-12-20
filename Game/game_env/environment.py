@@ -129,8 +129,8 @@ class KirbyEnvironment(gym.Env):
 
         # 1. Progression Reward with Time Factor
         progress_reward = max(0, current_level_progress - self.previous_level_progress)
-        time_factor = 1 - (self.step_count / 2500)  # Scale based on elapsed time (max steps: 3000)
-        reward += progress_reward * max(0.1, time_factor)  # Minimum factor is 0.1
+        time_factor = max(0.5, 1 - (self.step_count / 2500))  # Minimum 50% reward scaling
+        reward += progress_reward * time_factor
 
         # 2. Boss defeated
         if current_boss_health == 0 and self.previous_boss_health > 0:
@@ -188,8 +188,12 @@ class KirbyEnvironment(gym.Env):
             level_complete = True
             reward += 20000
 
-        # 11. Time Penalty
-        reward -= self.step_count * 0.1  # Subtract 0.1 reward per step
+        # 11. Time Penalty with Maximum Limit
+        max_time_penalty = 500  # Maximum penalty cap
+        reward -= min(self.step_count * 0.01, max_time_penalty)
+
+        # Log rewards for debugging
+        #print(f"Step Count: {self.step_count}, Time Penalty: {min(self.step_count * 0.01, max_time_penalty)}, Progress Reward: {progress_reward}")
 
         # Update states
         self.previous_health = current_health
