@@ -71,8 +71,8 @@ def main():
     agent = DDQNAgent(state_size, len(action_mapping), memory_size=50000, batch_size=64)
 
     # Training settings
-    num_epochs = 8000  # Total number of epochs
-    max_steps_per_episode = 3000
+    num_epochs = 20000  # Total number of epochs
+    max_steps_per_episode = 2500
 
     # Create a directory for checkpoints
     checkpoint_dir = "checkpoints"

@@ -33,6 +33,7 @@ class KirbyEnvironment(gym.Env):
         self.previous_level_progress = None
         self.previous_game_state = 1
         self.y_axis_steps = 0  # New: Count of steps only on the y-axis
+        self.step_count = 0  # New: Track the number of steps in the episode
 
     def IsBossActive(self):
         # Check if the boss is active
@@ -42,6 +43,7 @@ class KirbyEnvironment(gym.Env):
     def reset(self):
         self.kirby.reset_game()
         self.frame_stack.clear()
+        self.step_count = 0  # Reset step count
 
         # Initialize the frame stack with 4 identical frames
         initial_observation = self.pyboy.game_area()
@@ -63,6 +65,7 @@ class KirbyEnvironment(gym.Env):
     def step(self, action):
         self._perform_action(action)
         self.pyboy.tick()
+        self.step_count += 1  # Increment step count
 
         # Update the frame stack
         self.frame_stack.append(self.pyboy.game_area())
@@ -124,9 +127,10 @@ class KirbyEnvironment(gym.Env):
         level_complete = False
         life_lost = False
 
-        # 1. Progression Reward
+        # 1. Progression Reward with Time Factor
         progress_reward = max(0, current_level_progress - self.previous_level_progress)
-        reward += progress_reward * 2
+        time_factor = 1 - (self.step_count / 2500)  # Scale based on elapsed time (max steps: 3000)
+        reward += progress_reward * max(0.1, time_factor)  # Minimum factor is 0.1
 
         # 2. Boss defeated
         if current_boss_health == 0 and self.previous_boss_health > 0:
@@ -140,7 +144,7 @@ class KirbyEnvironment(gym.Env):
 
         # 4. Loss of a life
         if current_lives < self.previous_lives:
-            reward -= 1000
+            reward -= 3000
             self.kirby.reset_game()
             life_lost = True
 
@@ -164,7 +168,7 @@ class KirbyEnvironment(gym.Env):
                 self.y_axis_steps = 0
 
             if self.y_axis_steps > 200:
-                reward -= 10
+                reward -= 40
                 self.y_axis_steps = 0
         else:
             self.y_axis_steps = 0
@@ -183,6 +187,9 @@ class KirbyEnvironment(gym.Env):
             print("Warpstar reached")
             level_complete = True
             reward += 20000
+
+        # 11. Time Penalty
+        reward -= self.step_count * 0.1  # Subtract 0.1 reward per step
 
         # Update states
         self.previous_health = current_health
