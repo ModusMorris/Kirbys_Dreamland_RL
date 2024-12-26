@@ -5,7 +5,7 @@ import torch.optim as optim
 from collections import deque
 import numpy as np
 import os
-
+import math
 # Disable certain TensorFlow optimizations for compatibility (though not directly used here)
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
@@ -20,11 +20,12 @@ class DDQNAgent:
         lr=1e-5,
         epsilon_start=1.0,
         epsilon_end=0.1,
-        epsilon_decay=0.9999975,
+        #epsilon_decay=0.9999975,
         target_update_frequency=2000,
         memory_size=200000,
         model_path="agent_model.pth",
         writer=None,
+        num_epochs=10,
         **kwargs,
     ):
         """
@@ -48,9 +49,12 @@ class DDQNAgent:
         self.action_size = action_size
         self.batch_size = batch_size
         self.gamma = gamma
+        self.num_epochs = num_epochs
         self.epsilon = epsilon_start
         self.epsilon_end = epsilon_end
-        self.epsilon_decay = epsilon_decay
+        self.epsilon_decay = math.exp(
+            math.log(self.epsilon_end / self.epsilon) / self.num_epochs
+        )
         self.target_update_frequency = target_update_frequency
         self.memory = deque(maxlen=memory_size)
         self.model_path = model_path
@@ -164,9 +168,6 @@ class DDQNAgent:
         if self.writer:
             self.writer.add_scalar("Loss", loss.item(), current_epoch)
 
-        # Gradually decrease epsilon for exploration-exploitation tradeoff
-        if self.epsilon > self.epsilon_end:
-            self.epsilon *= self.epsilon_decay
 
     def train(self, current_epoch):
         """

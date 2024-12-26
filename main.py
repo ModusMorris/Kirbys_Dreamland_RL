@@ -71,7 +71,7 @@ def main():
     agent = DDQNAgent(state_size, len(action_mapping), memory_size=50000, batch_size=64)
 
     # Training settings
-    num_epochs = 20000  # Total number of epochs
+    num_epochs = 10  # Total number of epochs
     max_steps_per_episode = 2500
 
     # Create a directory for checkpoints
@@ -133,7 +133,11 @@ def main():
                     done = True
 
             print(f"\nEpisode ended. Reward: {total_reward}, Length: {episode_length}")
-
+            
+        # Decay epsilon once per epoch
+        if agent.epsilon > agent.epsilon_end:
+            agent.epsilon *= agent.epsilon_decay
+            
         # Log statistics to TensorBoard
         writer.add_scalar("Reward/Total", total_reward, epoch)
         writer.add_scalar("Episode Length", episode_length, epoch)
