@@ -64,8 +64,8 @@ To resume training from the last checkpoint:
 
 ## 🌟 Results
 After training for 8000 epochs:
-- 🎉 The agent consistently completes the first level by reaching the warp star.
-- 📈 Learning is guided by a robust reward system that encourages progress and discourages inefficient behavior.
+- 🎉 The agent completes the first level by reaching the warp star.
+- 📈 Learning is guided by a reward system that encourages progress and discourages inefficient behavior.
 
 ## 🌍 Future Work
 💡 Potential enhancements for the project:
