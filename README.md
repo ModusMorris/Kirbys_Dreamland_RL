@@ -63,7 +63,7 @@ To resume training from the last checkpoint:
 - Exploration (epsilon) will adjust dynamically to continue learning effectively.
 
 ## 🌟 Results
-After training for 8000 epochs:
+After training for 25000 epochs:
 - 🎉 The agent completes the first level by reaching the warp star.
 - 📈 Learning is guided by a reward system that encourages progress and discourages inefficient behavior.
 
