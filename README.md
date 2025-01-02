@@ -18,7 +18,7 @@ This project uses PyBoy, a Game Boy emulator, as the training environment. Game 
 - Attacking enemies
 - 🖼️ Observation Space: The game area is represented as a continuously updated 2D array.
 ## 🧠 Training Details
-The RL agent was trained for 8000 epochs, with each episode defined as:
+The RL agent was trained for 25000 epochs, with each episode defined as:
 - 🎯 Completion: Kirby reaches the warp star.
 - 💀 Termination: Kirby loses all lives.
 - ⏱️ Timeout: Kirby takes 2500 steps without completing the level.
