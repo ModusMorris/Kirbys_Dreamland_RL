@@ -9,7 +9,7 @@ class KirbyEnvironment(gym.Env):
     def __init__(self, rom_path="Kirby.gb"):
         super(KirbyEnvironment, self).__init__()
         self.pyboy = PyBoy(rom_path, window="SDL2")
-        self.pyboy.set_emulation_speed(0)
+        self.pyboy.set_emulation_speed(2)
         self.kirby = self.pyboy.game_wrapper
 
         # Start the game

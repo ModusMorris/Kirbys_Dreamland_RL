@@ -205,12 +205,18 @@ class DDQNAgent:
         )
         print(f"Model weights saved successfully to {checkpoint_path}.")
 
-    def load_model(self):
+    def load_model(self, model_path=None):
         """
         Loads the model, optimizer state, epsilon value, and replay memory from a file.
+
+        Args:
+            model_path (str): Path to the model file to load. Defaults to self.model_path.
         """
-        if os.path.exists(self.model_path):
-            checkpoint = torch.load(self.model_path, map_location=self.device)
+        if model_path is None:
+            model_path = self.model_path
+
+        if os.path.exists(model_path):
+            checkpoint = torch.load(model_path, map_location=self.device)
             self.model.load_state_dict(checkpoint["model_state_dict"])
             self.target_model.load_state_dict(checkpoint["target_model_state_dict"])
             self.optimizer.load_state_dict(
@@ -218,4 +224,6 @@ class DDQNAgent:
             )
             self.epsilon = checkpoint.get("epsilon", self.epsilon)
             self.memory = deque(checkpoint.get("memory", []), maxlen=self.memory.maxlen)
-            print("Model and memory loaded successfully.")
+            print(f"Model and memory loaded successfully from {model_path}.")
+        else:
+            print(f"Model file not found: {model_path}")
