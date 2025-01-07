@@ -14,14 +14,14 @@ def evaluate_model(model_path, num_episodes=100, max_steps_per_episode=3000):
         num_episodes (int): Number of episodes to evaluate.
         max_steps_per_episode (int): Maximum steps per episode.
     """
-    # Pfad zur ROM-Datei
+    # Path to the ROM file
     rom_path = os.path.join("Game", "Kirby.gb")
 
-    # Kirby-Umgebung erstellen
+    # Create the Kirby environment
     env = KirbyEnvironment(rom_path)
     print(f"Kirby environment successfully created for model: {model_path}")
 
-    # Aktionszuordnung definieren
+    # Define the action mapping
     action_mapping = {
         0: [WindowEvent.PRESS_ARROW_RIGHT],
         1: [WindowEvent.PRESS_ARROW_LEFT],
@@ -39,11 +39,11 @@ def evaluate_model(model_path, num_episodes=100, max_steps_per_episode=3000):
         ],
     }
 
-    # DDQN-Agent initialisieren
+    # Initialize the DDQN agent
     state_size = env.observation_space.shape[0]
     agent = DDQNAgent(state_size, len(action_mapping))
 
-    # Modell laden
+    # Load the trained model
     if os.path.exists(model_path):
         agent.load_model(model_path)
         print(f"Model successfully loaded from {model_path}")
@@ -52,7 +52,7 @@ def evaluate_model(model_path, num_episodes=100, max_steps_per_episode=3000):
         env.pyboy.stop()
         return
 
-    # Evaluation durchführen
+    # Perform evaluation
     for episode in range(num_episodes):
         print(f"\nStarting evaluation episode {episode + 1}/{num_episodes} for model: {model_path}")
         state = env.reset()
@@ -61,28 +61,27 @@ def evaluate_model(model_path, num_episodes=100, max_steps_per_episode=3000):
         steps = 0
 
         while not done and steps < max_steps_per_episode:
-            # Aktion vom Agenten auswählen (exploitieren)
+            # Select action using the agent (exploit only)
             action_idx = agent.select_action(state)
             action = action_mapping[action_idx]
 
-            # Aktion ausführen
+            # Perform the action
             for event in action:
                 env.pyboy.send_input(event)
 
-            # Nächsten Zustand abrufen
+            # Retrieve the next state
             next_state, reward, done, info = env.step(action_idx)
             total_reward += reward
             state = next_state
             steps += 1
 
-            # Überprüfen, ob das Level abgeschlossen wurde
+            # Check if the level is completed
             if info.get("level_complete"):
                 print(f"Level completed in episode {episode + 1} for model: {model_path}")
                 break
 
         print(f"Episode {episode + 1} for model {model_path} ended with total reward: {total_reward}")
-        time.sleep(1)  # Pause zwischen Episoden
-
+        time.sleep(1)  # Pause between episodes
     print(f"Evaluation of model {model_path} completed. Closing environment.")
     env.pyboy.stop()
 
@@ -97,7 +96,7 @@ def evaluate_models_parallel(model_paths, num_episodes=5, max_steps_per_episode=
     """
     processes = []
     for model_path in model_paths:
-        # Ein Prozess für jedes Modell starten
+        # Start a separate process for each model
         process = multiprocessing.Process(
             target=evaluate_model,
             args=(model_path, num_episodes, max_steps_per_episode)
@@ -105,12 +104,12 @@ def evaluate_models_parallel(model_paths, num_episodes=5, max_steps_per_episode=
         processes.append(process)
         process.start()
 
-    # Warten, bis alle Prozesse abgeschlossen sind
+    # Wait for all processes to complete
     for process in processes:
         process.join()
 
 if __name__ == "__main__":
-    # Liste der Modellpfade
+    # List of model paths
     model_paths = [
         "model/agent_model.pth",
         "model/agent_model_1000.pth",
@@ -118,5 +117,5 @@ if __name__ == "__main__":
         #"model/agent_model_25000.pth"
     ]
 
-    # Parallel Evaluation starten
+    # Start parallel evaluation
     evaluate_models_parallel(model_paths)
