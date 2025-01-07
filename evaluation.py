@@ -5,6 +5,7 @@ from pyboy.utils import WindowEvent
 import multiprocessing
 import time
 
+
 def evaluate_model(model_path, num_episodes=100, max_steps_per_episode=3000):
     """
     Evaluates a single trained model and shows its performance in the game.
@@ -54,7 +55,9 @@ def evaluate_model(model_path, num_episodes=100, max_steps_per_episode=3000):
 
     # Perform evaluation
     for episode in range(num_episodes):
-        print(f"\nStarting evaluation episode {episode + 1}/{num_episodes} for model: {model_path}")
+        print(
+            f"\nStarting evaluation episode {episode + 1}/{num_episodes} for model: {model_path}"
+        )
         state = env.reset()
         done = False
         total_reward = 0
@@ -77,13 +80,18 @@ def evaluate_model(model_path, num_episodes=100, max_steps_per_episode=3000):
 
             # Check if the level is completed
             if info.get("level_complete"):
-                print(f"Level completed in episode {episode + 1} for model: {model_path}")
+                print(
+                    f"Level completed in episode {episode + 1} for model: {model_path}"
+                )
                 break
 
-        print(f"Episode {episode + 1} for model {model_path} ended with total reward: {total_reward}")
+        print(
+            f"Episode {episode + 1} for model {model_path} ended with total reward: {total_reward}"
+        )
         time.sleep(1)  # Pause between episodes
     print(f"Evaluation of model {model_path} completed. Closing environment.")
     env.pyboy.stop()
+
 
 def evaluate_models_parallel(model_paths, num_episodes=5, max_steps_per_episode=3000):
     """
@@ -99,7 +107,7 @@ def evaluate_models_parallel(model_paths, num_episodes=5, max_steps_per_episode=
         # Start a separate process for each model
         process = multiprocessing.Process(
             target=evaluate_model,
-            args=(model_path, num_episodes, max_steps_per_episode)
+            args=(model_path, num_episodes, max_steps_per_episode),
         )
         processes.append(process)
         process.start()
@@ -108,13 +116,14 @@ def evaluate_models_parallel(model_paths, num_episodes=5, max_steps_per_episode=
     for process in processes:
         process.join()
 
+
 if __name__ == "__main__":
     # List of model paths
     model_paths = [
         "model/agent_model.pth",
         "model/agent_model_1000.pth",
         "model/agent_model_8000.pth",
-        #"model/agent_model_25000.pth"
+        # "model/agent_model_25000.pth"
     ]
 
     # Start parallel evaluation
