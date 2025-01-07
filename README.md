@@ -1,4 +1,9 @@
 # 🎮 Reinforcement Learning: Playing Kirby's Dreamland 🌟
+
+![Kirby complete level](https://github.com/user-attachments/assets/73091eef-1614-465c-a7f1-7f92a33a9209)
+
+
+
 ## 📝 Project Overview
 Welcome to the Kirby's Dreamland RL Project! This project showcases the implementation of a Reinforcement Learning (RL) agent that learns to play the first level of Kirby's Dreamland. Using a Double Deep Q-Network (DDQN), the agent aims to:
 - 🌠 Complete the level by reaching the warp star.
