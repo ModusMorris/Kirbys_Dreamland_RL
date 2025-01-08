@@ -22,7 +22,7 @@ class KirbyEnvironment(gym.Env):
         )
 
         # Frame stack for 4 frames
-        self.frame_stack = deque(maxlen=4)
+        self.frame_stack = deque(maxlen=4)w
 
         # Initialize state information
         self.previous_health = None
@@ -125,70 +125,59 @@ class KirbyEnvironment(gym.Env):
         level_complete = False
         life_lost = False
 
-        # 1. Boss defeated
-        if current_boss_health == 0 and self.previous_boss_health > 0:
-            print("Boss defeated")
-            reward += 10000
-
-        # 2. Damage dealt to the boss
-        if current_boss_health < self.previous_boss_health:
-            print("Boss damaged")
-            reward += 1000
-
-        # 3. Loss of a life
+        # 1. Bestrafung für Verlust von Leben beim Besiegen von Gegnern
         if current_lives < self.previous_lives:
-            reward -= 5000
-            self.kirby.reset_game()
+            print("Kirby lost a life!")
+            reward -= 10000  # Hohe Strafe für Verlust von Leben
             life_lost = True
 
-        # 4. Loss of health
-        if current_health < self.previous_health:
-            reward -= 10
+        # 2. Belohnung für Besiegen eines Gegners ohne Schaden
+        if current_score > self.previous_score and current_health == self.previous_health:
+            print("Enemy defeated without taking damage!")
+            reward += 500  # Zusätzliche Belohnung für sauberes Besiegen von Gegnern
 
-        # 5. Moving left
-        if (
-            current_level_progress != self.previous_level_progress
-            and kirby_x_position == 68
-        ):
-            reward -= 5
+        # 3. Bestrafung für Schaden beim Besiegen eines Gegners
+        if current_score > self.previous_score and current_health < self.previous_health:
+            print("Enemy defeated, but Kirby took damage!")
+            reward -= 200  # Bestrafung, wenn Kirby Schaden nimmt
 
-        # 6. Moving right
-        if kirby_x_position == 76:
-            reward += 10
+        # 4. Boss besiegt
+        if current_boss_health == 0 and self.previous_boss_health > 0:
+            print("Boss defeated!")
+            reward += 15000  # Hohe Belohnung für Besiegen des Bosses
 
-        # 7. Kirby stands still
-        if current_level_progress == self.previous_level_progress:
-            reward -= 1
+        # 5. Boss beschädigt
+        if current_boss_health < self.previous_boss_health:
+            print("Boss damaged!")
+            reward += 2000  # Moderate Belohnung für Schaden am Boss
 
-        # 8. Kirby only moves on the y-axis
-        if current_position[0] == self.previous_position[0]:
-            if current_position[1] != self.previous_position[1]:
-                self.y_axis_steps += 1
-            else:
-                self.y_axis_steps = 0
+        # 6. Fortschritt (Bewegung nach rechts)
+        if current_level_progress > self.previous_level_progress:
+            reward += 15  # Kleine Belohnung für Fortschritt
 
-            if self.y_axis_steps > 200:
-                reward -= 40
-                self.y_axis_steps = 0
-        else:
-            self.y_axis_steps = 0
+        # 7. Rückschritt (Bewegung nach links)
+        if current_level_progress < self.previous_level_progress:
+            reward -= 10  # Kleine Strafe für Rückschritt
 
-        # 9. Score increase
-        if current_score > self.previous_score:
-            reward += 5
-
-        # 10. Warpstar reached
+        # 8. Warpstar erreicht
         if (
             current_health > 0
             and current_game_state == 6
             and self.previous_game_state != 6
         ):
-            print(current_game_state)
-            print("Warpstar reached")
+            print("Warpstar reached!")
             level_complete = True
-            reward += 20000
+            reward += 25000  # Große Belohnung für Abschluss des Levels
 
-        # Update states
+        # 9. Stillstand bestrafen
+        if current_level_progress == self.previous_level_progress:
+            reward -= 2  # Strafe für keinen Fortschritt
+
+        # 10. Belohnung für effizientes Spielen
+        if current_health == self.previous_health and not life_lost:
+            reward += 5  # Belohnung für keine Verluste während des Fortschritts
+
+        # Update States
         self.previous_health = current_health
         self.previous_lives = current_lives
         self.previous_score = current_score
@@ -198,6 +187,7 @@ class KirbyEnvironment(gym.Env):
         self.previous_position = current_position
 
         return reward, level_complete, life_lost
+
 
     def _check_done(self):
         return self.kirby.game_over()
