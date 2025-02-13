@@ -123,7 +123,7 @@ class DDQNAgent:
         if random.random() <= self.epsilon:  # Exploration
             return random.randrange(self.action_size)
         else:  # Exploitation
-            state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+            state = torch.FloatTensor(state.astype(np.float32)).unsqueeze(0).to(self.device)
             with torch.no_grad():
                 return torch.argmax(self.model(state)).item()
 
