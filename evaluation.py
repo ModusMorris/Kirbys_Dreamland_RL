@@ -123,7 +123,7 @@ if __name__ == "__main__":
         "model/agent_model.pth",
         "model/agent_model_1000.pth",
         "model/agent_model_8000.pth",
-        "model/agent_model_25000.pth"
+        "model/agent_model_25000.pth",
     ]
 
     # Start parallel evaluation
