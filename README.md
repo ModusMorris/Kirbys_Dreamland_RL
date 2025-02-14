@@ -12,6 +12,7 @@ Welcome to the Kirby's Dreamland RL Project! This project showcases the implemen
 Key features of the project include:
 - 🖥️ Efficient training using a Convolutional Neural Network (CNN) that processes game data as arrays, not raw images.
 - 🏆 A custom reward and penalty system to guide the agent’s progress.
+-  Evaluation Script to test trained models easily and debug performance.
 ## 🔑 Key Details
 ### 🌍 Environment
 This project uses PyBoy, a Game Boy emulator, as the training environment. Game states are extracted as arrays representing the game field instead of relying on raw image data.
@@ -57,7 +58,7 @@ Training directly on raw game images is computationally expensive and often unne
   `cd kirby-rl`
 2. Install the dependencies:
    `pip install -r requirements.txt`
-3. Place the Kirby.gb ROM file in the appropriate directory.
+3. Place the Kirby.gb ROM file to the Game folder.
 
 ### 🏋️ Run Training
 Start training the agent by running:
@@ -66,6 +67,14 @@ Start training the agent by running:
 To resume training from the last checkpoint:
 - The model will automatically load the latest saved state.
 - Exploration (epsilon) will adjust dynamically to continue learning effectively.
+
+## 🎮 Running Trained Models (Evaluation)
+To test a trained model without retraining, you can use the evaluation.py script:
+`python evaluation.py`
+This script allows you to:
+- ✅ Load a pre-trained model and observe its performance.
+- ✅ Debug and analyze the agent’s behavior without needing to retrain.
+- ✅ Test different models efficiently.
 
 ## 🌟 Results
 After training for 25000 epochs:
@@ -77,3 +86,7 @@ After training for 25000 epochs:
 1. 🕹️ Extend Training: Apply the RL agent to additional levels of the game.
 2. 📊 Compare Algorithms: Experiment with alternative RL models for better performance.
 3. 🔧 Reward Tuning: Refine the reward system for more complex scenarios.
+
+## 🔥 Join the Project & Contribute!
+Feel free to fork, modify, and experiment with different RL approaches. Let’s see how far Kirby can go! 🚀
+
