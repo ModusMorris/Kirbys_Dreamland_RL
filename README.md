@@ -57,7 +57,7 @@ Training directly on raw game images is computationally expensive and often unne
   `git clone https://github.com/your-repo/kirby-rl.git`
   `cd kirby-rl`
 2. Install the dependencies:
-   `pip install -r requirements.txt`
+   `pip install -r requirements.txt` Python verion 3.9.20
 3. Place the Kirby.gb ROM file to the Game folder.
 
 ### 🏋️ Run Training
